@@ -54,7 +54,7 @@ void scanner::scan_file(const std::filesystem::path &path)
     {
       if (this->sig.compare(buffer, i))
       {
-        matches.push_back(file.tellg() + i);
+        matches.push_back(file.tellg() - actual_block_size + i);
       }
     }
     if (actual_block_size < BLOCK_SIZE)

@@ -14,6 +14,10 @@ bool file_filter::check(const std::filesystem::path &path) const
 
 bool file_filter::check_extension(const std::filesystem::path &path) const
 {
+  if (this->extensions.empty())
+  {
+    return true;
+  }
   return std::any_of(this->extensions.begin(), this->extensions.end(), [&path](const std::string &ext) {
       return path.extension() == ext;
   });
