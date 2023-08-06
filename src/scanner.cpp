@@ -2,7 +2,7 @@
 #include <fstream>
 #include <cstdio>
 
-scanner::scanner(const signature &sig, thread_pool &pool) : pool(pool), sig(sig)
+scanner::scanner(const signature &sig, thread_pool &pool, const file_filter &filter) : sig(sig), pool(pool), filter(filter)
 {
 
 }
@@ -23,6 +23,10 @@ void scanner::recursive_scan(const std::filesystem::path &path, int depth)
     }
     if (i->is_regular_file())
     {
+      if (!this->filter.check(i->path()))
+      {
+        continue;
+      }
       std::filesystem::path p = i->path();
       this->pool.add_task([p, this]() { this->scan_file(p); });
     }
@@ -42,6 +46,10 @@ void scanner::scan_file(const std::filesystem::path &path)
   {
     file.read(reinterpret_cast<char *>(buffer.data()), BLOCK_SIZE);
     std::streamsize actual_block_size = file.gcount();
+    if (actual_block_size < this->sig.length)
+    {
+      break;
+    }
     for (std::streamsize i = 0; i < actual_block_size - this->sig.length + 1; i++)
     {
       if (this->sig.compare(buffer, i))

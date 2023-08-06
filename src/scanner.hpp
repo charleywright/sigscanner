@@ -2,13 +2,14 @@
 
 #include "signature.hpp"
 #include "thread_pool.hpp"
+#include "file_filter.hpp"
 #include <filesystem>
 #include <mutex>
 
 class scanner
 {
 public:
-    scanner(const signature &sig, thread_pool &pool);
+    scanner(const signature &sig, thread_pool &pool, const file_filter &filter);
 
     void scan(const std::filesystem::path &path);
     void recursive_scan(const std::filesystem::path &path, int depth = -1);
@@ -16,6 +17,7 @@ public:
 private:
     thread_pool &pool;
     const signature &sig;
+    const file_filter &filter;
 
     std::mutex stdio_mutex;
 

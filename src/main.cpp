@@ -3,6 +3,7 @@
 #include "signature.hpp"
 #include "thread_pool.hpp"
 #include "scanner.hpp"
+#include "file_filter.hpp"
 
 void print_help(const std::filesystem::path &binary)
 {
@@ -13,7 +14,9 @@ void print_help(const std::filesystem::path &binary)
               "Flags:\n"
               "--depth <int>          - How many levels of subdirectory should be scanned. 1 for example means scan the directory and the directories in it\n"
               "--no-recurse           - Only scan files in this directory\n"
-              "-j <int>               - Number of threads to use for scanning\n", binary.filename().c_str());
+              "-j <int>               - Number of threads to use for scanning\n"
+              "--ext <extension>      - Filter by file extension. Can be specified multiple times. Should include the dot or empty for no extension: --ext '' --ext '.so'\n",
+              binary.filename().c_str());
 }
 
 int main(int argc, char **argv)
@@ -53,9 +56,11 @@ int main(int argc, char **argv)
   path = std::filesystem::canonical(path);
 
   thread_pool pool;
-  scanner scanner(sig, pool);
   pool.create(args.get<unsigned int>("j", 0));
 
+  file_filter filter(args);
+
+  scanner scanner(sig, pool, filter);
   if (args.get<int>("depth").has_value())
   {
     int depth = args.get<int>("depth").value();
