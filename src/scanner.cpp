@@ -1,6 +1,6 @@
 #include "scanner.hpp"
 #include <fstream>
-#include <cstdio>
+#include <iostream>
 
 scanner::scanner(const signature &sig, thread_pool &pool, const file_filter &filter) : sig(sig), pool(pool), filter(filter)
 {
@@ -39,38 +39,40 @@ void scanner::scan_file(const std::filesystem::path &path)
   std::ifstream file(path, std::ios::binary);
   file.unsetf(std::ios::skipws);
   std::vector<std::uint8_t> buffer(BLOCK_SIZE);
-
-  std::vector<std::streamsize> matches;
+  std::uint64_t chunk_offset_in_file = 0;
+  std::vector<std::uint64_t> matches;
 
   while (true)
   {
     file.read(reinterpret_cast<char *>(buffer.data()), BLOCK_SIZE);
-    std::streamsize actual_block_size = file.gcount();
+    std::uint64_t actual_block_size = file.gcount();
     if (actual_block_size < this->sig.length)
     {
       break;
     }
-    for (std::streamsize i = 0; i < actual_block_size - this->sig.length + 1; i++)
+    for (std::uint64_t i = 0; i < actual_block_size - this->sig.length + 1; i++)
     {
       if (this->sig.compare(buffer, i))
       {
-        matches.push_back(file.tellg() - actual_block_size + i);
+        matches.push_back(chunk_offset_in_file + i);
       }
     }
     if (actual_block_size < BLOCK_SIZE)
     {
       break;
     }
-    file.seekg(-this->sig.length + 1, std::ios::cur);
+    chunk_offset_in_file += actual_block_size - this->sig.length + 1;
+    file.seekg(static_cast<std::fstream::off_type>(chunk_offset_in_file));
   }
 
   if (!matches.empty())
   {
     std::lock_guard<std::mutex> lock(this->stdio_mutex);
-    std::printf("%s\n", path.c_str());
+    std::cout << path << "\n";
     for (const auto &match: matches)
     {
-      std::printf("  0x%lx\n", match);
+      std::cout << "  0x" << std::hex << match << std::dec << "\n";
     }
+    std::cout << std::endl;
   }
 }

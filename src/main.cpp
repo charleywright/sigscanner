@@ -4,19 +4,21 @@
 #include "thread_pool.hpp"
 #include "scanner.hpp"
 #include "file_filter.hpp"
+#include <iostream>
 
 void print_help(const std::filesystem::path &binary)
 {
-  std::printf("Recursively scan all files for a given signature\n\n"
-              "Usage: %s <signature> [path] [options]\n"
-              "The signature should be an IDA-style pattern e.g. '?? A7 98 52 ?? 32 AD 72'\n"
-              "If a path is not specified the current directory will be used\n\n"
-              "Flags:\n"
-              "--depth <int>          - How many levels of subdirectory should be scanned. 1 for example means scan the directory and the directories in it\n"
-              "--no-recurse           - Only scan files in this directory\n"
-              "-j <int>               - Number of threads to use for scanning\n"
-              "--ext <extension>      - Filter by file extension. Can be specified multiple times. Should include the dot or empty for no extension: --ext '' --ext '.so'\n",
-              binary.filename().c_str());
+  std::cout << "Recursively scan all files for a given signature\n\n"
+               "Usage: " << binary.filename() <<
+            " <signature> [path] [options]\n"
+            "The signature should be an IDA-style pattern e.g. '?? A7 98 52 ?? 32 AD 72'\n"
+            "If a path is not specified the current directory will be used\n\n"
+            "Flags:\n"
+            "--depth <int>          - How many levels of subdirectory should be scanned. 1 for example means scan the directory and the directories in it\n"
+            "--no-recurse           - Only scan files in this directory\n"
+            "-j <int>               - Number of threads to use for scanning\n"
+            "--ext <extension>      - Filter by file extension. Can be specified multiple times. Should include the dot or empty for no extension: --ext '' --ext '.so'"
+            << std::endl;
 }
 
 int main(int argc, char **argv)
@@ -33,7 +35,7 @@ int main(int argc, char **argv)
   const std::vector<std::string_view> &positional_args = args.positional();
   if (positional_args.empty())
   {
-    std::fprintf(stderr, "Error: No signature specified\n");
+    std::cerr << "Error: No signature specified" << std::endl;
     print_help(binary);
     return 1;
   }
@@ -41,7 +43,7 @@ int main(int argc, char **argv)
   const signature sig(positional_args[0]);
   if (!sig.valid())
   {
-    std::fprintf(stderr, "Error: Invalid signature\n");
+    std::cerr << "Error: Invalid signature" << std::endl;
     print_help(binary);
     return 1;
   }
@@ -49,7 +51,7 @@ int main(int argc, char **argv)
   std::filesystem::path path = positional_args.size() > 1 ? positional_args[1] : std::filesystem::current_path();
   if (!std::filesystem::exists(path))
   {
-    std::fprintf(stderr, "Error: Path does not exist\n");
+    std::cerr << "Error: Path does not exist" << std::endl;
     print_help(binary);
     return 1;
   }

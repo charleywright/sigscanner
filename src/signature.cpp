@@ -15,7 +15,7 @@ signature::signature(const std::string_view &pattern)
       this->mask.push_back(MaskType::PLACEHOLDER);
     } else
     {
-      this->pattern.push_back(std::strtoul(pattern.substr(i, 2).data(), nullptr, 16));
+      this->pattern.push_back(static_cast<std::uint8_t>(std::strtoul(pattern.substr(i, 2).data(), nullptr, 16) & 0xFF));
       this->mask.push_back(MaskType::BYTE);
     }
   }
