@@ -1,7 +1,7 @@
 # SigScanner
 
 A simple CLI signature scanner written in C++. It is designed to be easy to use and fast enough, however could certainly
-be improved. It should also be cross-platform however I've only tested on Linux.
+be improved. Tested on Linux and Windows, however I would guess unicode characters in path names wouldn't be supported.
 
 ## Usage
 
@@ -16,7 +16,7 @@ Flags:
 --depth <int>          - How many levels of subdirectory should be scanned. 1 for example means scan the directory and the directories in it
 --no-recurse           - Only scan files in this directory
 -j <int>               - Number of threads to use for scanning
---ext <extension>      - Filter by file extension. Can be specified multiple times. Should include the dot or empty for no extension: --ext '' --ext '.so'
+--ext <extension>      - Filter by file extension. Can be specified 0 or more times. Should include the dot or empty for no extension: --ext '' --ext '.so'
 ```
 
 ## Building

@@ -17,7 +17,7 @@ void print_help(const std::filesystem::path &binary)
             "--depth <int>          - How many levels of subdirectory should be scanned. 1 for example means scan the directory and the directories in it\n"
             "--no-recurse           - Only scan files in this directory\n"
             "-j <int>               - Number of threads to use for scanning\n"
-            "--ext <extension>      - Filter by file extension. Can be specified multiple times. Should include the dot or empty for no extension: --ext '' --ext '.so'"
+            "--ext <extension>      - Filter by file extension. Can be specified 0 or more times. Should include the dot or empty for no extension: --ext '' --ext '.so'"
             << std::endl;
 }
 
