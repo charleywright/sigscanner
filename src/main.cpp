@@ -1,15 +1,15 @@
-#include <filesystem>
 #include "flags.h"
-#include "signature.hpp"
-#include "thread_pool.hpp"
-#include "scanner.hpp"
-#include "file_filter.hpp"
+#include "sigscanner/sigscanner.hpp"
 #include <iostream>
+#include <filesystem>
+#include <string>
 
-void print_help(const std::filesystem::path &binary)
+static std::string binary_name;
+
+void print_help()
 {
   std::cout << "Recursively scan all files for a given signature\n\n"
-               "Usage: " << binary.filename() <<
+               "Usage: " << binary_name <<
             " <signature> [path] [options]\n"
             "The signature should be an IDA-style pattern e.g. '?? A7 98 52 ?? 32 AD 72'\n"
             "If a path is not specified the current directory will be used\n\n"
@@ -23,12 +23,12 @@ void print_help(const std::filesystem::path &binary)
 
 int main(int argc, char **argv)
 {
+  binary_name = std::filesystem::path(argv[0]).filename();
   const flags::args args(argc, argv);
-  const std::filesystem::path binary = argv[0];
 
   if (args.get<bool>("h") || args.get<bool>("help"))
   {
-    print_help(binary);
+    print_help();
     return 0;
   }
 
@@ -36,15 +36,15 @@ int main(int argc, char **argv)
   if (positional_args.empty())
   {
     std::cerr << "Error: No signature specified" << std::endl;
-    print_help(binary);
+    print_help();
     return 1;
   }
 
-  const signature sig(positional_args[0]);
-  if (!sig.valid())
+  const sigscanner::signature sig(positional_args[0]);
+  if (sig.size() == 0)
   {
     std::cerr << "Error: Invalid signature" << std::endl;
-    print_help(binary);
+    print_help();
     return 1;
   }
 
@@ -52,27 +52,42 @@ int main(int argc, char **argv)
   if (!std::filesystem::exists(path))
   {
     std::cerr << "Error: Path does not exist" << std::endl;
-    print_help(binary);
+    print_help();
     return 1;
   }
   path = std::filesystem::canonical(path);
 
-  thread_pool pool;
-  pool.create(args.get<unsigned int>("j", 0));
+  std::size_t thread_count = args.get("j", 1);
+  sigscanner::scanner scanner(sig, thread_count);
 
-  file_filter filter(args);
-
-  scanner scanner(sig, pool, filter);
-  if (args.get<int>("depth").has_value())
+  if (std::filesystem::is_directory(path))
   {
-    int depth = args.get<int>("depth").value();
-    scanner.recursive_scan(path, depth);
-    return 0;
-  }
-  if (args.get<bool>("no-recurse"))
+    std::int64_t depth = args.get("depth", -1);
+    if (args.get<bool>("no-recurse"))
+    {
+      depth = 0;
+    }
+    const auto results = scanner.scan_directory(path, depth);
+    for (const auto &[file, file_results]: results)
+    {
+      std::cout << file << "\n";
+      for (const auto &offset: file_results)
+      {
+        std::cout << "  0x" << std::hex << offset << "\n";
+      }
+    }
+    std::cout << std::endl;
+  } else if (std::filesystem::is_regular_file(path))
   {
-    scanner.scan(path);
-    return 0;
+    const auto results = scanner.scan_file(path);
+    for (const auto &offset: results)
+    {
+      std::cout << "0x" << std::hex << offset << "\n";
+    }
+    std::cout << std::endl;
+  } else
+  {
+    std::cerr << "File of invalid type specified" << std::endl;
+    return 1;
   }
-  scanner.recursive_scan(path);
 }
