@@ -58,16 +58,20 @@ int main(int argc, char **argv)
   path = std::filesystem::canonical(path);
 
   std::size_t thread_count = args.get("j", 1);
-  sigscanner::scanner scanner(sig, thread_count);
+  sigscanner::scanner scanner(sig);
+  sigscanner::scan_options scan_options;
+  scan_options.set_thread_count(thread_count);
+  scan_options.add_extensions(args.values("ext"));
 
   if (std::filesystem::is_directory(path))
   {
-    std::int64_t depth = args.get("depth", -1);
+    int depth = args.get("depth", -1);
     if (args.get<bool>("no-recurse"))
     {
       depth = 0;
     }
-    const auto results = scanner.scan_directory(path, depth);
+    scan_options.set_max_depth(depth);
+    const auto results = scanner.scan_directory(path, scan_options);
     for (const auto &[file, file_results]: results)
     {
       std::cout << file << "\n";
@@ -79,7 +83,7 @@ int main(int argc, char **argv)
     std::cout << std::endl;
   } else if (std::filesystem::is_regular_file(path))
   {
-    const auto results = scanner.scan_file(path);
+    const auto results = scanner.scan_file(path, scan_options);
     for (const auto &offset: results)
     {
       std::cout << "0x" << std::hex << offset << "\n";

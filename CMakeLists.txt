@@ -6,7 +6,7 @@ option(SIG_SCANNER_SHARED_LIB "Build a sigscanner library" OFF)
 option(SIG_SCANNER_STATIC_LIB "Build a static sigscanner library" OFF)
 option(SIG_SCANNER_BUILD_EXEC "Build the sigscanner executable" ON)
 
-set(SIG_SCANNER_LIB_SOURCES lib/thread_pool.cpp lib/signature.cpp lib/multi_scanner.cpp lib/scanner.cpp)
+set(SIG_SCANNER_LIB_SOURCES lib/thread_pool.cpp lib/signature.cpp lib/multi_scanner.cpp lib/scanner.cpp lib/scan_options.cpp)
 
 if(SIG_SCANNER_SHARED_LIB)
     set(SIG_SCANNER_SHARED_LIB sig-scanner-shared PARENT_SCOPE)

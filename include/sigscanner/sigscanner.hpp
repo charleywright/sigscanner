@@ -10,6 +10,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <initializer_list>
 
 #ifndef SIGSCANNER_FILE_BLOCK_SIZE
 #define SIGSCANNER_FILE_BLOCK_SIZE static_cast<std::uint64_t>(1'048'576ull) // 1MB
@@ -48,10 +49,10 @@ namespace sigscanner
         signature() = default;
         signature(std::string_view pattern); // IDA-Style: "AA BB CC ?? ?? ?? DD EE FF"
         signature(std::string_view pattern, std::string_view mask); // Code-Style: "\xAA\xBB\x00\x00\xEE\xFF" "xx??xx"
-        signature(const sigscanner::signature &copy);
-        signature &operator=(const sigscanner::signature &copy);
-        signature(sigscanner::signature &&move) noexcept;
-        signature &operator=(sigscanner::signature &&move) noexcept;
+        signature(const signature &copy);
+        signature &operator=(const signature &copy);
+        signature(signature &&move) noexcept;
+        signature &operator=(signature &&move) noexcept;
 
         // Comparison
         bool operator==(const signature &rhs) const;
@@ -60,15 +61,15 @@ namespace sigscanner
         // Output
         explicit operator std::string() const;
 
-        friend std::ostream &operator<<(std::ostream &os, const sigscanner::signature &signature)
+        friend std::ostream &operator<<(std::ostream &os, const signature &signature)
         {
           os << static_cast<std::string>(signature);
           return os;
         }
 
         // Members
-        bool check(const sigscanner::byte *data, std::size_t size) const;
-        std::vector<sigscanner::offset> scan(const sigscanner::byte *data, std::size_t size, sigscanner::offset base) const;
+        bool check(const byte *data, std::size_t size) const;
+        std::vector<offset> scan(const byte *data, std::size_t size, offset base) const;
         std::size_t size() const;
 
         // Allow std::hash to not hash on every call
@@ -83,82 +84,135 @@ namespace sigscanner
         };
 
     private:
-        std::vector<sigscanner::byte> pattern;
-        std::vector<sigscanner::signature::mask_type> mask;
+        std::vector<byte> pattern;
+        std::vector<mask_type> mask;
         std::size_t length = 0;
         std::size_t hash = 0;
 
         void update_hash();
     };
 
+    class multi_scanner;
+    class scanner;
+
+    class scan_options
+    {
+    public:
+        scan_options() = default;
+        scan_options(const scan_options &copy) = default;
+        scan_options &operator=(const scan_options &copy) = default;
+        scan_options(scan_options &&move) noexcept = default;
+        scan_options &operator=(scan_options &&move) noexcept = default;
+
+        void set_max_depth(int depth); // -1 for infinite (default). 0 would scan only the given directory
+        void set_file_size_min(std::int64_t size); // -1 to disable (default)
+        void set_file_size_max(std::int64_t size); // -1 to disable (default)
+        void set_thread_count(std::size_t count);
+        enum class threading_mode;
+        void set_threading_mode(threading_mode mode);
+
+        enum class extension_checking_mode;
+        void set_extension_checking_mode(extension_checking_mode mode);
+        void add_extension(std::string_view extension);
+        void add_extensions(std::initializer_list<std::string_view> extensions);
+        void add_extensions(const std::vector<std::string_view> &extensions);
+        void remove_extension(std::string_view extension);
+        void remove_extensions(std::initializer_list<std::string_view> extensions);
+        void remove_extensions(const std::vector<std::string_view> &extensions);
+
+        enum class filename_checking_mode;
+        void set_filename_checking_mode(filename_checking_mode mode);
+        void add_filename(std::string_view filename);
+        void add_filenames(std::initializer_list<std::string_view> filenames);
+        void add_filenames(const std::vector<std::string_view> &filenames);
+        void remove_filename(std::string_view filename);
+        void remove_filenames(std::initializer_list<std::string_view> filenames);
+        void remove_filenames(const std::vector<std::string_view> &filenames);
+
+    public:
+        enum class threading_mode
+        {
+            PER_CHUNK, // New task for each chunk. Better for a small number of files
+            PER_FILE // New task for each file. Better for a large number of files (default)
+        };
+
+        // For either modes if no extensions are specified, all files are scanned
+        enum class extension_checking_mode
+        {
+            WHITELIST, // Only scan files with the given extensions (default)
+            BLACKLIST // Scan all files except those with the given extensions
+        };
+
+        enum class filename_checking_mode
+        {
+            EXACT, // Filename must match exactly (default)
+            INCLUDES // Filename must include one of the provided case-sensitive strings
+        };
+
+    private:
+        int max_depth = -1;
+        std::int64_t min_size = -1;
+        std::int64_t max_size = -1;
+        std::size_t thread_count = 1;
+        threading_mode threading = threading_mode::PER_FILE;
+        extension_checking_mode extension_checking = extension_checking_mode::WHITELIST;
+        std::vector<std::string_view> extensions;
+        filename_checking_mode filename_checking = filename_checking_mode::EXACT;
+        std::vector<std::string_view> filenames;
+
+        bool check_depth(int depth) const;
+        bool check_file_size(std::int64_t size) const;
+        bool check_extension(const std::filesystem::path &path) const;
+        bool check_filename(const std::filesystem::path &path) const;
+
+        friend multi_scanner;
+        friend scanner;
+    };
+
     class multi_scanner
     {
     public:
         multi_scanner() = default;
-        explicit multi_scanner(std::size_t thread_count);
-        explicit multi_scanner(const sigscanner::signature &signature);
-        explicit multi_scanner(const std::vector<sigscanner::signature> &signatures);
-        multi_scanner(const sigscanner::signature &signature, std::size_t thread_count);
-        multi_scanner(const std::vector<sigscanner::signature> &signatures, std::size_t thread_count);
-
-        /*
-         * Set the number of threads to use when scanning a directory. Default 1.
-         */
-        void set_thread_count(std::size_t count);
+        explicit multi_scanner(const signature &signature);
+        explicit multi_scanner(const std::vector<signature> &signatures);
 
         /*
          * Add a signature to the scanner. Doing so while scanning is undefined behavior.
          */
-        void add_signature(const sigscanner::signature &signature);
-        void add_signatures(const std::vector<sigscanner::signature> &signatures);
+        void add_signature(const signature &signature);
+        void add_signatures(const std::vector<signature> &signatures);
 
-        [[nodiscard]] std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> scan(const sigscanner::byte *data, std::size_t len) const;
-        [[nodiscard]] std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> scan_file(const std::filesystem::path &path) const;
-        // Max depth of -1 means no limit. 0 means scan just the directory. 1 means scan the directory and its immediate children, etc.
-        [[nodiscard]] std::unordered_map<sigscanner::signature, std::unordered_map<std::filesystem::path, std::vector<sigscanner::offset>>>
-        scan_directory(const std::filesystem::path &path, std::int64_t max_depth = -1) const;
+        [[nodiscard]] std::unordered_map<signature, std::vector<offset>>
+        scan(const byte *data, std::size_t len, const scan_options &options = scan_options()) const;
+        [[nodiscard]] std::unordered_map<signature, std::vector<offset>> scan_file(const std::filesystem::path &path, const scan_options &options = scan_options()) const;
+        [[nodiscard]] std::unordered_map<signature, std::unordered_map<std::filesystem::path, std::vector<offset>>>
+        scan_directory(const std::filesystem::path &path, const scan_options &options = scan_options()) const;
 
     private:
-        // TODO: Implement and benchmark different threading modes
-        enum class file_scan_type
-        {
-            PER_CHUNK, // New task for each chunk
-            PER_FILE // New task for each file
-        };
-
         /*
          * Scan a file for a signature. this->thread_pool must already be initialized.
          * One of results_ptr or directory_results_ptr must be non-null.
          * The results map must have all keys initialized.
          */
-        void scan_file_internal(const std::filesystem::path &path, sigscanner::multi_scanner::file_scan_type scan_type, std::size_t longest_sig,
-                                std::unordered_map<sigscanner::signature, std::unordered_map<std::filesystem::path, std::vector<sigscanner::offset>>> &results,
+        void scan_file_internal(const std::filesystem::path &path, const scan_options &options, std::size_t longest_sig,
+                                std::unordered_map<signature, std::unordered_map<std::filesystem::path, std::vector<offset>>> &results,
                                 std::mutex &result_mutex) const;
 
     private:
-        std::vector<sigscanner::signature> signatures;
-        std::size_t thread_count = 1;
-        mutable sigscanner::thread_pool thread_pool;
-        // TODO: settings mutex
-
+        std::vector<signature> signatures;
         std::size_t longest_sig_length() const;
+        mutable sigscanner::thread_pool thread_pool;
     };
 
     class scanner
     {
     public:
-        explicit scanner(const sigscanner::signature &signature, std::size_t thread_count = 1);
+        explicit scanner(const signature &signature);
 
-        /*
-         * Set the number of threads to use when scanning a directory. Default 1.
-         */
-        void set_thread_count(std::size_t thread_count);
-
-        [[nodiscard]] std::vector<sigscanner::offset> scan(const sigscanner::byte *data, std::size_t len) const;
-        [[nodiscard]] std::vector<sigscanner::offset> scan_file(const std::filesystem::path &path) const;
-        // Max depth of -1 means no limit. 0 means scan just the directory. 1 means scan the directory and its immediate children, etc.
-        [[nodiscard]] std::unordered_map<std::filesystem::path, std::vector<sigscanner::offset>>
-        scan_directory(const std::filesystem::path &path, std::int64_t max_depth = -1) const;
+        [[nodiscard]] std::vector<offset> scan(const byte *data, std::size_t len, const scan_options &options = scan_options()) const;
+        [[nodiscard]] std::vector<offset> scan_file(const std::filesystem::path &path, const scan_options &options = scan_options()) const;
+        [[nodiscard]] std::unordered_map<std::filesystem::path, std::vector<offset>>
+        scan_directory(const std::filesystem::path &path, const scan_options &options = scan_options()) const;
 
     private:
         sigscanner::multi_scanner multi_scanner;

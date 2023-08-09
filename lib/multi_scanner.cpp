@@ -4,11 +4,6 @@
 #include <cassert>
 #include <limits>
 
-sigscanner::multi_scanner::multi_scanner(std::size_t thread_count)
-{
-  this->set_thread_count(thread_count);
-}
-
 sigscanner::multi_scanner::multi_scanner(const sigscanner::signature &signature)
 {
   this->add_signature(signature);
@@ -17,23 +12,6 @@ sigscanner::multi_scanner::multi_scanner(const sigscanner::signature &signature)
 sigscanner::multi_scanner::multi_scanner(const std::vector<sigscanner::signature> &signatures)
 {
   this->add_signatures(signatures);
-}
-
-sigscanner::multi_scanner::multi_scanner(const sigscanner::signature &signature, std::size_t thread_count)
-{
-  this->add_signature(signature);
-  this->set_thread_count(thread_count);
-}
-
-sigscanner::multi_scanner::multi_scanner(const std::vector<sigscanner::signature> &signatures, std::size_t thread_count)
-{
-  this->add_signatures(signatures);
-  this->set_thread_count(thread_count);
-}
-
-void sigscanner::multi_scanner::set_thread_count(std::size_t count)
-{
-  this->thread_count = count;
 }
 
 void sigscanner::multi_scanner::add_signature(const sigscanner::signature &signature)
@@ -46,10 +24,11 @@ void sigscanner::multi_scanner::add_signatures(const std::vector<sigscanner::sig
   this->signatures.insert(this->signatures.end(), sigs.begin(), sigs.end());
 }
 
-std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> sigscanner::multi_scanner::scan(const sigscanner::byte *data, std::size_t len) const
+std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>>
+sigscanner::multi_scanner::scan(const sigscanner::byte *data, std::size_t len, const scan_options &options) const
 {
   std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> results;
-  this->thread_pool.create(this->thread_count);
+  this->thread_pool.create(options.thread_count);
   for (const auto &signature: this->signatures)
   {
     this->thread_pool.add_task([&results, signature, data, len] {
@@ -60,7 +39,7 @@ std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> sigsc
   return results;
 }
 
-std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> sigscanner::multi_scanner::scan_file(const std::filesystem::path &path) const
+std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> sigscanner::multi_scanner::scan_file(const std::filesystem::path &path, const sigscanner::scan_options &options) const
 {
   std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> results;
   for (const auto &signature: this->signatures)
@@ -75,8 +54,8 @@ std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> sigsc
   const std::size_t longest_sig = this->longest_sig_length();
   std::unordered_map<sigscanner::signature, std::unordered_map<std::filesystem::path, std::vector<sigscanner::offset>>> file_results;
   std::mutex file_results_mutex;
-  this->thread_pool.create(this->thread_count);
-  this->scan_file_internal(path, file_scan_type::PER_CHUNK, longest_sig, file_results, file_results_mutex);
+  this->thread_pool.create(options.thread_count);
+  this->scan_file_internal(path, options, longest_sig, file_results, file_results_mutex);
   this->thread_pool.destroy();
 
   for (auto &[signature, file]: file_results)
@@ -89,7 +68,7 @@ std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> sigsc
 }
 
 std::unordered_map<sigscanner::signature, std::unordered_map<std::filesystem::path, std::vector<sigscanner::offset>>>
-sigscanner::multi_scanner::scan_directory(const std::filesystem::path &dir, std::int64_t max_depth) const
+sigscanner::multi_scanner::scan_directory(const std::filesystem::path &dir, const sigscanner::scan_options &options) const
 {
   std::unordered_map<sigscanner::signature, std::unordered_map<std::filesystem::path, std::vector<sigscanner::offset>>> results;
   for (const auto &signature: this->signatures)
@@ -103,12 +82,12 @@ sigscanner::multi_scanner::scan_directory(const std::filesystem::path &dir, std:
 
   std::mutex results_mutex;
   std::size_t longest_sig = this->longest_sig_length();
-  this->thread_pool.create(this->thread_count);
+  this->thread_pool.create(options.thread_count);
 
   typedef std::filesystem::recursive_directory_iterator recursive_directory_iterator;
   for (auto it = recursive_directory_iterator(dir); it != recursive_directory_iterator(); it++)
   {
-    if (max_depth >= 0 && it.depth() >= max_depth)
+    if (!options.check_depth(it.depth()))
     {
       it.disable_recursion_pending();
       continue;
@@ -117,9 +96,12 @@ sigscanner::multi_scanner::scan_directory(const std::filesystem::path &dir, std:
     {
       continue;
     }
-    // TODO: File filters
     const std::filesystem::path &path = it->path();
-    this->scan_file_internal(path, file_scan_type::PER_FILE, longest_sig, results, results_mutex);
+    if(!options.check_extension(path) || !options.check_filename(path))
+    {
+      continue;
+    }
+    this->scan_file_internal(path, options, longest_sig, results, results_mutex);
   }
 
   this->thread_pool.destroy();
@@ -132,28 +114,28 @@ sigscanner::multi_scanner::scan_directory(const std::filesystem::path &dir, std:
  * I kept getting sizes of 9223372036854775807 because tellg() doesn't do
  * what most people think it does
  */
-std::uint64_t get_file_size(std::fstream &file)
+std::int64_t get_file_size(std::fstream &file)
 {
   file.ignore(std::numeric_limits<std::streamsize>::max());
   std::streamsize length = file.gcount();
   file.clear();
   file.seekg(0, std::ios_base::beg);
-  return static_cast<std::uint64_t>(length);
+  return static_cast<std::int64_t>(length);
 }
 
 void sigscanner::multi_scanner::scan_file_internal(
-        const std::filesystem::path &path, sigscanner::multi_scanner::file_scan_type scan_type, std::size_t longest_sig,
+        const std::filesystem::path &path, const sigscanner::scan_options &options, std::size_t longest_sig,
         std::unordered_map<sigscanner::signature, std::unordered_map<std::filesystem::path, std::vector<sigscanner::offset>>> &results,
         std::mutex &result_mutex) const
 {
-  switch (scan_type)
+  switch (options.threading)
   {
-    case file_scan_type::PER_CHUNK:
+    case scan_options::threading_mode::PER_CHUNK:
     {
       std::fstream file(path, std::ios::in | std::ios::binary);
       file.unsetf(std::ios::skipws);
-      const std::uint64_t file_size = get_file_size(file);
-      if (file_size == 0)
+      const std::int64_t file_size = get_file_size(file);
+      if (file_size == 0 || !options.check_file_size(file_size))
       {
         return;
       }
@@ -186,13 +168,13 @@ void sigscanner::multi_scanner::scan_file_internal(
       file.close();
       break;
     }
-    case file_scan_type::PER_FILE:
+    case scan_options::threading_mode::PER_FILE:
     {
-      this->thread_pool.add_task([path, longest_sig, &result_mutex, &results, this] {
+      this->thread_pool.add_task([path, longest_sig, &result_mutex, &results, &options, this] {
           std::fstream file(path, std::ios::in | std::ios::binary);
           file.unsetf(std::ios::skipws);
-          const std::uint64_t file_size = get_file_size(file);
-          if (file_size == 0)
+          const std::int64_t file_size = get_file_size(file);
+          if (file_size == 0 || !options.check_file_size(file_size))
           {
             return;
           }
