@@ -76,7 +76,7 @@ namespace sigscanner
 
         // Allow std::hash to not hash on every call
         template<typename T> friend
-        class std::hash;
+        struct std::hash;
 
     public:
         enum class mask_type : bool

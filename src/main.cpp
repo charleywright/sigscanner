@@ -23,7 +23,7 @@ void print_help()
 
 int main(int argc, char **argv)
 {
-  binary_name = std::filesystem::path(argv[0]).filename();
+  binary_name = std::filesystem::path(argv[0]).filename().string();
   const flags::args args(argc, argv);
 
   if (args.get<bool>("h") || args.get<bool>("help"))
