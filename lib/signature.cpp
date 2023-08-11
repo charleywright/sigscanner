@@ -1,6 +1,11 @@
 #include "sigscanner/sigscanner.hpp"
 #include <sstream>
 
+sigscanner::signature::signature(const char *pattern) : signature(std::string_view(pattern))
+{
+
+}
+
 sigscanner::signature::signature(std::string_view pattern)
 {
   if (pattern.size() % 3 != 2)

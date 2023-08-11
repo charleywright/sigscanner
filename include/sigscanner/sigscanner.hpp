@@ -47,6 +47,7 @@ namespace sigscanner
     public:
         // Constructors
         signature() = default;
+        signature(const char* pattern); // IDA-Style: "AA BB CC ?? ?? ?? DD EE FF"
         signature(std::string_view pattern); // IDA-Style: "AA BB CC ?? ?? ?? DD EE FF"
         signature(std::string_view pattern, std::string_view mask); // Code-Style: "\xAA\xBB\x00\x00\xEE\xFF" "xx??xx"
         signature(const signature &copy);
