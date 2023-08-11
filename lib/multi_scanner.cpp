@@ -39,6 +39,21 @@ sigscanner::multi_scanner::scan(const sigscanner::byte *data, std::size_t len, c
   return results;
 }
 
+std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>>
+sigscanner::multi_scanner::reverse_scan(const sigscanner::byte *data, std::size_t len, const sigscanner::scan_options &options) const
+{
+  std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> results;
+  this->thread_pool.create(options.thread_count);
+  for (const auto &signature: this->signatures)
+  {
+    this->thread_pool.add_task([&results, signature, data, len] {
+        results.emplace(signature, signature.reverse_scan(data, len, 0));
+    });
+  }
+  this->thread_pool.destroy();
+  return results;
+}
+
 std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> sigscanner::multi_scanner::scan_file(const std::filesystem::path &path, const sigscanner::scan_options &options) const
 {
   std::unordered_map<sigscanner::signature, std::vector<sigscanner::offset>> results;

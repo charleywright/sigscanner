@@ -144,11 +144,30 @@ std::vector<sigscanner::offset> sigscanner::signature::scan(const sigscanner::by
     return offsets;
   }
 
-  for (std::size_t i = 0; i < size - this->length; i++)
+  for (const byte *ptr = data; ptr < data + size - this->length; ptr++)
   {
-    if (this->check(data + i, size - i))
+    if (this->check(ptr, this->length))
     {
-      offsets.push_back(base + i);
+      offsets.push_back(base + (ptr - data));
+    }
+  }
+
+  return offsets;
+}
+
+std::vector<sigscanner::offset> sigscanner::signature::reverse_scan(const sigscanner::byte *data, std::size_t size, sigscanner::offset base) const
+{
+  std::vector<offset> offsets;
+  if (size < this->length)
+  {
+    return offsets;
+  }
+
+  for (const byte *ptr = data + size - this->length; ptr >= data; ptr--)
+  {
+    if (this->check(ptr, this->length))
+    {
+      offsets.push_back(base + (ptr - data));
     }
   }
 

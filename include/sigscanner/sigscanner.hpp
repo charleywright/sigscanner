@@ -70,6 +70,7 @@ namespace sigscanner
         // Members
         bool check(const byte *data, std::size_t size) const;
         std::vector<offset> scan(const byte *data, std::size_t size, offset base) const;
+        std::vector<offset> reverse_scan(const byte *data, std::size_t size, offset base) const;
         std::size_t size() const;
 
         // Allow std::hash to not hash on every call
@@ -184,6 +185,8 @@ namespace sigscanner
 
         [[nodiscard]] std::unordered_map<signature, std::vector<offset>>
         scan(const byte *data, std::size_t len, const scan_options &options = scan_options()) const;
+        [[nodiscard]] std::unordered_map<signature, std::vector<offset>>
+        reverse_scan(const byte *data, std::size_t len, const scan_options &options = scan_options()) const;
         [[nodiscard]] std::unordered_map<signature, std::vector<offset>> scan_file(const std::filesystem::path &path, const scan_options &options = scan_options()) const;
         [[nodiscard]] std::unordered_map<signature, std::unordered_map<std::filesystem::path, std::vector<offset>>>
         scan_directory(const std::filesystem::path &path, const scan_options &options = scan_options()) const;
@@ -210,6 +213,7 @@ namespace sigscanner
         explicit scanner(const signature &signature);
 
         [[nodiscard]] std::vector<offset> scan(const byte *data, std::size_t len, const scan_options &options = scan_options()) const;
+        [[nodiscard]] std::vector<offset> reverse_scan(const byte *data, std::size_t len, const scan_options &options = scan_options()) const;
         [[nodiscard]] std::vector<offset> scan_file(const std::filesystem::path &path, const scan_options &options = scan_options()) const;
         [[nodiscard]] std::unordered_map<std::filesystem::path, std::vector<offset>>
         scan_directory(const std::filesystem::path &path, const scan_options &options = scan_options()) const;
